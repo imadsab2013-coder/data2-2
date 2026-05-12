@@ -1,5 +1,4 @@
 streamlit
-anthropic
-requests
-openpyxl
+google-generativeai
 pandas
+openpyxl
