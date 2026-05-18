@@ -5,8 +5,8 @@ import os
 import json
 from datetime import datetime
 
-# 1️⃣ الإعدادات البصرية والمادية
-st.set_page_config(page_title="مجلس البينة V6", layout="wide", initial_sidebar_state="collapsed")
+# 1️⃣ الإعدادات البصرية وقوالب التصميم المادي
+st.set_page_config(page_title="مجلس البينة V7", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -18,6 +18,26 @@ st.markdown("""
         border: 1px solid #333333;
         padding: 20px;
         margin-top: 10px;
+    }
+    
+    /* بطاقات آيات البحث المطور - تدعم سطرين وتبرز الكلمة */
+    .verse-card {
+        background: #0f0f0f;
+        border: 1px solid #222222;
+        border-right: 4px solid #ffcc00;
+        padding: 12px;
+        margin-top: 12px;
+        margin-bottom: 2px;
+        font-size: 15px;
+        line-height: 1.6;
+        color: #ffffff;
+    }
+    
+    .verse-card-header {
+        font-size: 12px;
+        color: #888888;
+        margin-bottom: 5px;
+        display: block;
     }
     
     .verse-preview {
@@ -47,38 +67,51 @@ st.markdown("""
         margin: 5px 0;
     }
     
-    div.stButton > button {
+    /* أزرار تفكيك الكلمات الفرعية */
+    div.word-grid button {
         background-color: #111111 !important;
         color: #ffffff !important;
         border-radius: 0px !important;
         border: 1px solid #333333 !important;
         width: 100% !important;
-        text-align: right !important;
-        padding: 8px !important;
-        font-weight: bold !important;
+        text-align: center !important;
+        padding: 6px !important;
         font-size: 14px !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis;
     }
-    
-    div.stButton > button:hover {
+    div.word-grid button:hover {
         border-color: #ffffff !important;
         background-color: #262626 !important;
     }
     
+    /* أزرار الاختيار المرافقة للبطاقات */
+    div.select-action button {
+        background-color: #1a1a1a !important;
+        color: #ffcc00 !important;
+        border: 1px solid #333333 !important;
+        border-radius: 0px !important;
+        font-size: 12px !important;
+        padding: 2px 12px !important;
+        width: auto !important;
+        margin-bottom: 12px !important;
+    }
+    div.select-action button:hover {
+        background-color: #ffcc00 !important;
+        color: #000000 !important;
+    }
+    
     .nav-box {
-        background-color: #1a1a1a;
+        background-color: #111111;
         padding: 10px;
-        border: 1px dashed #555555;
+        border: 1px dashed #444444;
         margin-bottom: 15px;
+        font-size: 13px;
     }
     
     header, footer { display: none !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2️⃣ دوال التنظيف والتنقية ونحت النصوص
+# 2️⃣ دوال التطهير والنحت البصري للنصوص
 def clean_quran_text(text):
     if not isinstance(text, str): return ""
     return re.sub(r"[\u0610-\u0615\u064B-\u065E\u06D6-\u06ED\u200B-\u200D\uFEFF]", "", text).strip()
@@ -96,20 +129,36 @@ def normalize_arabic(text):
     text = re.sub(r"[ةه]", "ه", text)
     return text
 
-def truncate_from_keyword(text, keyword, max_chars=45):
-    """يبدأ النص المعروض من الكلمة المفتاحية المطلوبة صعوداً لسهولة الفحص البصري"""
+def get_highlighted_snippet(text, keyword, max_chars=130):
+    """صياغة بطاقة بيانية تمتد لسطرين تبدأ من موقع الكلمة المفتاحية وتلونها بصرياً"""
     norm_text = normalize_arabic(text)
     norm_key = normalize_arabic(keyword)
-    
     pos = norm_text.find(norm_key)
-    if pos != -1 and pos > 0:
-        truncated = "..." + text[pos:]
-    else:
-        truncated = text
+    
+    if pos == -1:
+        snippet = text[:max_chars] + "..." if len(text) > max_chars else text
+        return f"﴿ {snippet} ﴾"
         
-    if len(truncated) > max_chars:
-        return truncated[:max_chars] + "..."
-    return truncated
+    start_pos = max(0, pos - 15)
+    if start_pos > 0:
+        space_pos = text.find(' ', start_pos, pos)
+        if space_pos != -1: start_pos = space_pos + 1
+        
+    prefix = "..." if start_pos > 0 else ""
+    end_pos = start_pos + max_chars
+    suffix = "..." if len(text) > end_pos else ""
+    
+    snippet = text[start_pos:end_pos]
+    norm_snippet = normalize_arabic(snippet)
+    k_pos = norm_snippet.find(norm_key)
+    
+    if k_pos != -1:
+        k_len = len(keyword)
+        actual_word = snippet[k_pos:k_pos+k_len]
+        highlighted = snippet[:k_pos] + f"<span style='color:#ffcc00; font-weight:bold; border-bottom:1px solid #ffcc00;'>{actual_word}</span>" + snippet[k_pos+k_len:]
+        return f"{prefix}﴿ {highlighted} ﴾{suffix}"
+        
+    return f"{prefix}﴿ {snippet} ﴾{suffix}"
 
 @st.cache_data
 def load_quran_data():
@@ -125,7 +174,7 @@ def load_quran_data():
             except: continue
     return None
 
-# 3️⃣ ميكانيكا حفظ المستندات والأوراق المالية
+# 3️⃣ أرشفة الأوراق المالية والنتائج
 RESULTS_DIR = 'data/mfolder_results'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -134,43 +183,24 @@ def save_paper(query, title_suffix, text_content):
     filename = sorted(sanitized.split(), key=len)[-1] if sanitized.split() else "research"
     filepath = os.path.join(RESULTS_DIR, f"{filename}_{title_suffix}_{datetime.now().strftime('%H%M%S')}.json")
     
-    data = {
-        'query': query,
-        'title': title_suffix,
-        'main_content': text_content,
-        'timestamp': datetime.now().isoformat()
-    }
+    data = {'query': query, 'title': title_suffix, 'main_content': text_content, 'timestamp': datetime.now().isoformat()}
     try:
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        with open(filepath, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except: return False
 
-# 4️⃣ إدارة حالة الذاكرة (Session State) للغوص اللانهائي
+# 4️⃣ إدارة هندسة الجلسة والذاكرة العميقة
 if "main_query" not in st.session_state: st.session_state.main_query = ""
 if "selected_main_verse" not in st.session_state: st.session_state.selected_main_verse = None
-# مصفوفة التتبع المتداخل: تحتوي على قواميس تحوي الكلمة المستهدفة والآية المختارة داخلياً
-if "history" not in st.session_state: st.session_state.history = [] 
+if "history" not in st.session_state: st.session_state.history = []
 
 def reset_all():
     st.session_state.main_query = ""
     st.session_state.selected_main_verse = None
     st.session_state.history = []
 
-def on_main_query_change():
-    st.session_state.selected_main_verse = None
-    st.session_state.history = []
-
-def set_active_main_verse(v_key):
-    st.session_state.selected_main_verse = v_key
-    st.session_state.history = [] # تصفير الغوص الفرعي عند تغيير المبحث الأساسي
-
 def dive_into_word(word):
-    # إضافة مستوى غوص جديد إلى التاريخ
-    st.session_state.history.append({
-        "word": word,
-        "selected_verse": None
-    })
+    st.session_state.history.append({"word": word, "selected_verse": None})
 
 def set_sub_verse(v_key):
     if st.session_state.history:
@@ -178,14 +208,12 @@ def set_sub_verse(v_key):
 
 def go_back():
     if st.session_state.history:
-        # إذا كانت الآية داخل المستوى الحالي مختارة، نلغي اختيار الآية أولاً
         if st.session_state.history[-1]["selected_verse"] is not None:
             st.session_state.history[-1]["selected_verse"] = None
         else:
-            # وإلا نخرج من مستوى الكلمة بالكامل إلى المستوى الذي قبله
             st.session_state.history.pop()
 
-# 5️⃣ تحميل قاعدة البيانات
+# 5️⃣ استدعاء البيانات وتطهير السور لمنع المربعات
 df_quran = load_quran_data()
 if df_quran is None:
     st.error("خطأ مادي: ملف البيانات غير موجود.")
@@ -198,22 +226,32 @@ text_col = next((c for c in cols if c in ['نص الآية', 'text', 'الآية
 
 df_quran[surah_col] = df_quran[surah_col].apply(clean_surah_names)
 
-# 6️⃣ واجهة المستخدم والتحكم
-col_input, col_clear = st.columns([5, 1])
-with col_input:
-    st.text_input(
-        "المبحث الرئيسي الكبير:", 
-        key="main_query", 
-        on_change=on_main_query_change, 
-        placeholder="أدخل مبحث البحث الأول الكبير هنا...", 
-        label_visibility="collapsed"
-    )
-with col_clear:
-    if st.button("🔄 تصفير الشاشة"):
+# 6️⃣ صياغة الاستمارات (المستوى الأول الشاشات النظيفة)
+with st.form(key="search_form_panel", clear_on_submit=False):
+    col_input, col_btn = st.columns([5, 1])
+    with col_input:
+        search_input = st.text_input(
+            "المبحث الرئيسي الكبير:",
+            value="",
+            placeholder="أدخل لفظ المبحث الأول الكبير هنا (الشريط يبدأ فارغاً)...",
+            label_visibility="collapsed"
+        )
+    with col_btn:
+        submit_search = st.form_submit_button("🔍 إطلاق البحث")
+
+if submit_search and search_input:
+    st.session_state.main_query = search_input
+    st.session_state.selected_main_verse = None
+    st.session_state.history = []
+    st.rerun()
+
+# زر تصفير الشاشة المستقل خارج الاستمارة
+if st.session_state.main_query:
+    if st.button("🔄 تصفير شاشة المعالجة"):
         reset_all()
         st.rerun()
 
-# 7️⃣ السبورة السوداء التحليلية
+# 7️⃣ تشغيل المطبخ التحليلي المشترك
 st.markdown('<div class="blackboard-container">', unsafe_allow_html=True)
 
 if st.session_state.main_query:
@@ -221,45 +259,50 @@ if st.session_state.main_query:
     main_matches = []
     
     for idx, row in df_quran.iterrows():
-        t_norm = normalize_arabic(str(row[text_col]))
-        if mq_norm in t_norm:
-            main_matches.append({
-                'surah': row[surah_col], 'verse': int(row[verse_col]), 
-                'text': row[text_col], 'idx': idx
-            })
+        if mq_norm in normalize_arabic(str(row[text_col])):
+            main_matches.append({'surah': row[surah_col], 'verse': int(row[verse_col]), 'text': row[text_col], 'idx': idx})
             
     col_right_main, col_left_sub = st.columns([1, 1])
     
-    # ---------------- الشق الأيمن: ناتج البحث الأول الكبير (ثابت ومقصوص مادياً) ----------------
+    # ---------------- 📑 الشق الأيمن: ناتج البحث الأول الكبير (المستوى الأول ثابت ملوّن وممتد) ----------------
     with col_right_main:
         st.markdown(f"### 🔍 نتائج المبحث الكبير: ({len(main_matches)})")
         
         if len(main_matches) > 0:
-            if st.button("💾 حفظ المبحث الكبير كاملاً", key="save_main_large"):
+            if st.button("💾 حفظ نتائج المبحث الكبير", key="save_main_large"):
                 all_texts = [f"({m['surah']}:{m['verse']}) {m['text']}" for m in main_matches]
                 if save_paper(st.session_state.main_query, "البحث_الكبير", "\n".join(all_texts)):
-                    st.success("✅ تم حفظ نتائج المبحث الكبير")
+                    st.success("✅ تم الحفظ")
         st.write("---")
         
         for i, match in enumerate(main_matches):
             v_key = f"{match['surah']}_{match['verse']}"
-            active_mark = "🔹 " if st.session_state.selected_main_verse == v_key else ""
+            is_active = (st.session_state.selected_main_verse == v_key)
             
-            # تطبيق تقنية البدء من الكلمة المطلوبة داخل أزرار المبحث الكبير
-            display_text = truncate_from_keyword(match['text'], st.session_state.main_query)
-            btn_label = f"{active_mark}﴿ {display_text} ﴾ ({match['surah']}:{match['verse']})"
+            # صياغة بطاقة البيان الممتدة لسطرين مع التلوين
+            html_snippet = get_highlighted_snippet(match['text'], st.session_state.main_query)
+            active_border = "border-right: 4px solid #00ffcc;" if is_active else ""
             
-            st.button(
-                btn_label, 
-                key=f"main_v_{i}_{v_key}", 
-                on_click=set_active_main_verse, 
-                args=(v_key,)
-            )
+            st.markdown(f"""
+                <div class="verse-card" style="{active_border}">
+                    <span class="verse-card-header"> سورة {match['surah']} | الآية: {match['verse']} {"(مختارة حالياً) 🔹" if is_active else ""}</span>
+                    {html_snippet}
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # زر مالي أسفل البطاقة للاختيار والتفكيك
+            with st.container():
+                st.markdown('<div class="select-action">', unsafe_allow_html=True)
+                if st.button(f"🎯 تحليل الآية [{match['surah']}:{match['verse']}]", key=f"btn_m_{i}_{v_key}"):
+                    st.session_state.selected_main_verse = v_key
+                    st.session_state.history = []
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------------- الشق الأيسر: نظام المعالجة والغوص المتداخل ----------------
+    # ---------------- 🧬 الشق الأيسر: هندسة الغوص التكراري اللانهائي (المستويات المتداخلة) ----------------
     with col_left_sub:
         if not st.session_state.history:
-            # المستوى الثاني: معاينة الآية المختارة وتفكيكها
+            # المستوى الثاني: معاينة وسياق وتفكيك الآية الكبرى المختارة
             if st.session_state.selected_main_verse:
                 target = next((m for m in main_matches if f"{m['surah']}_{m['verse']}" == st.session_state.selected_main_verse), None)
                 if target:
@@ -277,9 +320,10 @@ if st.session_state.main_query:
                         cls = "context-verse context-verse-center" if is_tgt else "context-verse"
                         st.markdown(f"<div class='{cls}'>{'⭐ ' if is_tgt else ''}[{v_num}] {c_row[text_col]}</div>", unsafe_allow_html=True)
                     
-                    st.markdown("### 🛠️ تفكيك الآية (اضغط على كلمة للغوص المتداخل)")
+                    st.markdown("### 🛠️ تفكيك الآية (اضغط على كلمة للغوص المتداخل - مستوى 3)")
                     words = [w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم") for w in target['text'].split() if len(w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم")) > 1]
                     
+                    st.markdown('<div class="word-grid">', unsafe_allow_html=True)
                     cols_per_row = 4
                     for i in range(0, len(words), cols_per_row):
                         row_cols = st.columns(cols_per_row)
@@ -288,56 +332,56 @@ if st.session_state.main_query:
                                 word = words[i + j]
                                 with row_cols[j]:
                                     st.button(word, key=f"w_lvl2_{i+j}_{word}", on_click=dive_into_word, args=(word,))
+                    st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.markdown("<div style='text-align:center; padding:100px; color:#444;'>اختر آية من المبحث الكبير لتفكيكها والغوص في مستوياتها.</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align:center; padding:100px; color:#444;'>اختر آية من المبحث الكبير لتفكيكها والغوص في مستوياتها التكرارية.</div>", unsafe_allow_html=True)
         
         else:
-            # تفعيل نظام الغوص اللانهائي (المستويات المتقدمة)
+            # تفعيل خوارزمية الغوص التكراري (المستويات 3، 5، 7... إلخ) الملونة والممتدة لسطرين
             current_level_idx = len(st.session_state.history)
             current_level = st.session_state.history[-1]
             active_word = current_level["word"]
             active_verse = current_level["selected_verse"]
             
-            # شريط التتبع البصري للمستويات
             path_str = " ➔ ".join([h["word"] for h in st.session_state.history])
-            st.markdown(f"<div class='nav-box'>🧬 مسار الغوص الحالي (مستوى {current_level_idx + 2}):<br><b>{path_str}</b></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='nav-box'>🧬 مسار الغوص الحالي (المستوى التحليلي {current_level_idx + 2}):<br><b>{path_str}</b></div>", unsafe_allow_html=True)
             
             if st.button("⬅️ العودة خطوة للخلف", key=f"back_btn_{current_level_idx}"):
                 go_back()
                 st.rerun()
                 
             if not active_verse:
-                # عرض الآيات المطابقة للكلمة المتتبعة في هذا المستوى
+                # عرض الآيات المطابقة للكلمة المتتبعة في هذا المستوى (تطبيق السطرين والتلوين المطور)
                 sub_q_norm = normalize_arabic(active_word)
                 sub_matches = []
                 for idx, row in df_quran.iterrows():
                     if sub_q_norm in normalize_arabic(str(row[text_col])):
                         sub_matches.append({'surah': row[surah_col], 'verse': int(row[verse_col]), 'text': row[text_col]})
                 
-                st.markdown(f"🎯 **مطابقات اللفظ [ {active_word} ]: ({len(sub_matches)})**")
-                
-                if st.button(f"💾 حفظ أوراق اللفظ [{active_word}]", key=f"save_sub_{current_level_idx}"):
-                    sub_texts = [f"({sm['surah']}:{sm['verse']}) {sm['text']}" for sm in sub_matches]
-                    if save_paper(active_word, f"غوص_مستوى_{current_level_idx}", "\n".join(sub_texts)):
-                        st.success("✅ تم حفظ الورقة الحالية")
+                st.markdown(f"🎯 **مطابقات اللفظ المتتبع [ {active_word} ]: ({len(sub_matches)})**")
                 st.write("---")
                 
                 for idx, sm in enumerate(sub_matches):
                     v_sub_key = f"{sm['surah']}_{sm['verse']}"
-                    # عرض النص مقصوصاً بدءاً من الكلمة المتتبعة لسهولة القراءة والفرز
-                    sub_display_text = truncate_from_keyword(sm['text'], active_word)
-                    st.button(
-                        f"﴿ {sub_display_text} ﴾ [{sm['surah']}:{sm['verse']}]", 
-                        key=f"sub_v_btn_{current_level_idx}_{idx}_{v_sub_key}",
-                        on_click=set_sub_verse,
-                        args=(v_sub_key,)
-                    )
+                    
+                    # صياغة البطاقة الفرعية الممتدة والملونة للكلمة الفرعية المتتبعة
+                    html_snippet_sub = get_highlighted_snippet(sm['text'], active_word)
+                    st.markdown(f"""
+                        <div class="verse-card">
+                            <span class="verse-card-header"> سورة {sm['surah']} | الآية: {sm['verse']}</span>
+                            {html_snippet_sub}
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    with st.container():
+                        st.markdown('<div class="select-action">', unsafe_allow_html=True)
+                        st.button(f"🎯 الانتقال لتفكيك آية [{sm['surah']}:{sm['verse']}]", key=f"sub_v_btn_{current_level_idx}_{idx}_{v_sub_key}", on_click=set_sub_verse, args=(v_sub_key,))
+                        st.markdown('</div>', unsafe_allow_html=True)
             else:
-                # تم اختيار آية معينة داخل هذا المستوى الفرعي -> نعرض سياقها وتفكيك كلماتها للغوص أعمق
+                # تفعيل تفكيك آية فرعية داخل مستوى متقدم للغوص أعمق (مستويات 4، 6، 8)
                 surah_name, v_num_str = active_verse.split('_')
                 v_num = int(v_num_str)
                 
-                # جلب نص الآية الفرعية المختارة
                 v_row = df_quran[(df_quran[surah_col] == surah_name) & (df_quran[verse_col].astype(int) == v_num)]
                 if not v_row.empty:
                     v_text = v_row.iloc[0][text_col]
@@ -359,6 +403,7 @@ if st.session_state.main_query:
                     st.markdown("### 🛠️ تفكيك الآية الفرعية (اضغط للغوص إلى مستوى أعمق)")
                     sub_words = [w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم") for w in v_text.split() if len(w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم")) > 1]
                     
+                    st.markdown('<div class="word-grid">', unsafe_allow_html=True)
                     cols_per_row = 4
                     for i in range(0, len(sub_words), cols_per_row):
                         row_cols = st.columns(cols_per_row)
@@ -367,5 +412,6 @@ if st.session_state.main_query:
                                 sw = sub_words[i + j]
                                 with row_cols[j]:
                                     st.button(sw, key=f"w_dive_{current_level_idx}_{i+j}_{sw}", on_click=dive_into_word, args=(sw,))
+                    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
