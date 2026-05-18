@@ -1,8 +1,3 @@
-"""
-🌟 مجلس البينة V4 - النسخة الهندسية المستقرة
-يعتمد على نظام Callbacks لتأمين تدفق البيانات ومنع الارتداد
-"""
-
 import streamlit as st
 import pandas as pd
 import re
@@ -10,7 +5,7 @@ import os
 import json
 from datetime import datetime
 
-# 1️⃣ الإعدادات البصرية الصارمة (ألوان ثلاثية وتصميم مسطح)
+# 1️⃣ الإعدادات البصرية والمادية
 st.set_page_config(page_title="مجلس البينة V4", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -23,7 +18,6 @@ st.markdown("""
         border: 1px solid #333333;
         padding: 20px;
         margin-top: 10px;
-        border-radius: 0px;
     }
     
     .verse-preview {
@@ -51,14 +45,16 @@ st.markdown("""
         color: #ffffff;
     }
     
+    /* أزرار عريضة وواضحة */
     div.stButton > button {
         background-color: #111111 !important;
         color: #ffffff !important;
         border-radius: 0px !important;
         border: 1px solid #333333 !important;
         width: 100% !important;
-        text-align: right !important;
+        text-align: center !important;
         padding: 10px !important;
+        font-weight: bold !important;
     }
     
     div.stButton > button:hover {
@@ -77,7 +73,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2️⃣ تنظيف مادي للنصوص (حظر المربعات والرموز المشوهة)
+# 2️⃣ دوال التنظيف المادي (إزالة علامات الضبط المسببة للمربعات)
 def clean_quran_text(text):
     if not isinstance(text, str): return ""
     return re.sub(r"[\u0610-\u0615\u064B-\u065E\u06D6-\u06ED]", "", text).strip()
@@ -103,7 +99,7 @@ def load_quran_data():
             except: continue
     return None
 
-# 3️⃣ ميكانيكا الحفظ واسترجاع الأوراق المستقلة
+# 3️⃣ ميكانيكا الأوراق المستقلة (تعمل بشكل ممتاز كما أكدت)
 RESULTS_DIR = 'data/mfolder_results'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -134,28 +130,23 @@ def load_papers():
             except: pass
     return papers
 
-# 4️⃣ تهيئة الذاكرة والدوال الميكانيكية (Callbacks) لمنع الانهيار والارتداد
+# 4️⃣ هيكلة الذاكرة ودوال الـ Callbacks الصارمة لمنع الارتداد
 if "search_query" not in st.session_state: st.session_state.search_query = ""
-if "main_search_input" not in st.session_state: st.session_state.main_search_input = ""
 if "selected_verse_key" not in st.session_state: st.session_state.selected_verse_key = None
 
-# دالة تُستدعى عند الكتابة في خانة البحث
-def on_search_type():
-    st.session_state.search_query = st.session_state.main_search_input
+# دالة التحديث المباشر للمبحث (تُستدعى عند التغيير في خانة البحث)
+def on_search_change():
     st.session_state.selected_verse_key = None
 
-# دالة تُستدعى عند الضغط على أي زر تتبعي (كلمة أو ورقة)
-def force_search_update(new_word, verse_key=None):
-    st.session_state.main_search_input = new_word
+# دالة التحديث المباشر عند الضغط على زر (لتفادي مشكلة الضغط المزدوج)
+def track_word_action(new_word):
     st.session_state.search_query = new_word
-    st.session_state.selected_verse_key = verse_key
+    st.session_state.selected_verse_key = None
 
-# دالة تُستدعى عند اختيار آية لمعاينتها
 def set_active_verse(v_key):
     st.session_state.selected_verse_key = v_key
 
-
-# تحميل البيانات
+# 5️⃣ تحميل البيانات الرئيسية
 df_quran = load_quran_data()
 if df_quran is None:
     st.error("خطأ مادي: ملف البيانات غير موجود.")
@@ -166,14 +157,15 @@ surah_col = next((c for c in cols if c in ['السورة', 'surah']), cols[0])
 verse_col = next((c for c in cols if c in ['رقم الآية', 'verse_number', 'الآية']), cols[1])
 text_col = next((c for c in cols if c in ['نص الآية', 'text', 'الآية_نص']), cols[2])
 
-# 5️⃣ بناء الواجهة الثابتة
+# 6️⃣ الواجهة العلوية
 col_input, col_papers, col_clear = st.columns([4, 1, 1])
 
 with col_input:
+    # ربط المربع مباشرة بالمتغير الرئيسي search_query
     st.text_input(
         "المبحث الموحد:", 
-        key="main_search_input", 
-        on_change=on_search_type, 
+        key="search_query", 
+        on_change=on_search_change, 
         placeholder="أدخل اللفظ المراد تتبعه منطقياً...", 
         label_visibility="collapsed"
     )
@@ -187,17 +179,17 @@ with col_papers:
                 st.button(
                     f"📄 {p_name}", 
                     key=f"load_p_{p_name}", 
-                    on_click=force_search_update, 
-                    args=(p_data['query'], v_key)
+                    on_click=track_word_action, 
+                    args=(p_data['query'],)
                 )
         else:
             st.text("المجلد خاوٍ.")
 
 with col_clear:
     if st.button("🔄 تصفير"):
-        force_search_update("")
+        track_word_action("")
 
-# 6️⃣ السبورة السوداء المدمجة ماديّاً
+# 7️⃣ السبورة السوداء
 st.markdown('<div class="blackboard-container">', unsafe_allow_html=True)
 
 if st.session_state.search_query:
@@ -217,7 +209,6 @@ if st.session_state.search_query:
     else:
         st.markdown(f"**المطابقات: ({len(matched_rows)})**")
         
-        # الاعتماد على الحاويات الأصلية لـ Streamlit داخل تصميم السبورة لمنع تسرب النتائج
         col_list, col_view = st.columns([1, 1])
         
         with col_list:
@@ -258,19 +249,22 @@ if st.session_state.search_query:
                         st.markdown(f"<div class='{cls}'>{prefix}[{v_num}] {c_row[text_col]}</div>", unsafe_allow_html=True)
                     
                     st.markdown("### 🔍 تتبع اللفظ أفقياً")
-                    # عزل حروف الوقف تماماً
                     words = [w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم") for w in target['text'].split() if len(w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم")) > 1]
                     
-                    word_cols = st.columns(len(words) if words else 1)
-                    for w_idx, word in enumerate(words):
-                        with word_cols[w_idx % len(word_cols)]:
-                            # استخدام Callbacks هنا ينهي مشكلة تجميد الأزرار للأبد
-                            st.button(
-                                word, 
-                                key=f"track_{w_idx}_{word}_{st.session_state.selected_verse_key}", 
-                                on_click=force_search_update, 
-                                args=(word,)
-                            )
+                    # هندسة المصفوفة الشبكية: تحديد 4 أعمدة في كل سطر لحل مشكلة التكسير العمودي للحروف
+                    cols_per_row = 4
+                    for i in range(0, len(words), cols_per_row):
+                        row_cols = st.columns(cols_per_row)
+                        for j in range(cols_per_row):
+                            if i + j < len(words):
+                                word = words[i + j]
+                                with row_cols[j]:
+                                    st.button(
+                                        word, 
+                                        key=f"trk_{target['surah']}_{target['verse']}_{i+j}_{word}", 
+                                        on_click=track_word_action, 
+                                        args=(word,)
+                                    )
                                 
                     st.write("---")
                     if st.button("💾 حفظ كـ ورقة مستقلة", use_container_width=True):
