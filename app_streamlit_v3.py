@@ -1,8 +1,3 @@
-"""
-🌟 مجلس البينة V4 - نظام السبورة السوداء النقية
-البروتوكول الصارم: ألوان ثلاثية + روابط inline + أوراق مستقلة
-"""
-
 import streamlit as st
 import pandas as pd
 import re
@@ -10,23 +5,23 @@ import os
 import json
 from datetime import datetime
 
-# إعدادات Streamlit
+# 1️⃣ الإعدادات والاضطلاع بالهوية البصرية العريضة (ألوان ثلاثية فقط)
 st.set_page_config(page_title="مجلس البينة V4", layout="wide", initial_sidebar_state="collapsed")
 
-# التصميم النقي - ألوان ثلاثية فقط
+# التصميم النقي - ألوان ثلاثية فقط وحبس المخرجات داخل السبورة
 st.markdown("""
     <style>
     * { direction: rtl; text-align: right; }
     
     html, body, [data-testid="stAppViewContainer"] {
-        background: #000000;
-        color: #ffffff;
+        background: #000000 !important;
+        color: #ffffff !important;
         margin: 0;
         padding: 0;
     }
     
     [data-testid="stVerticalBlockBG"] {
-        background: #000000;
+        background: #000000 !important;
         padding: 0;
     }
     
@@ -44,6 +39,7 @@ st.markdown("""
         gap: 10px;
     }
     
+    /* وعاء السبورة السوداء الحاصر للنتائج */
     .blackboard {
         background: #000000;
         border: 1px solid #333333;
@@ -51,41 +47,6 @@ st.markdown("""
         padding: 20px;
         margin: 20px;
         min-height: 400px;
-        max-height: 70vh;
-        overflow-y: auto;
-    }
-    
-    .blackboard::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .blackboard::-webkit-scrollbar-track {
-        background: #000000;
-    }
-    
-    .blackboard::-webkit-scrollbar-thumb {
-        background: #333333;
-    }
-    
-    .result-button {
-        display: block;
-        width: 100%;
-        background: #1a1a1a;
-        border: 1px solid #333333;
-        border-radius: 0;
-        padding: 15px;
-        margin: 10px 0;
-        color: #ffffff;
-        text-align: right;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 14px;
-        line-height: 1.6;
-    }
-    
-    .result-button:hover {
-        background: #2a2a2a;
-        border-color: #555555;
     }
     
     .verse-preview {
@@ -111,23 +72,41 @@ st.markdown("""
     }
     
     .context-verse-center {
-        border-right: 2px solid #555555;
+        border-right: 2px solid #ffffff;
         background: #222222;
         font-weight: bold;
     }
     
-    .stButton>button {
-        background-color: #333333 !important;
+    /* ضبط ميكانيكا أزرار السبورة لتكون مستقرة وعريضة */
+    div.stButton > button {
+        background-color: #1a1a1a !important;
         color: #ffffff !important;
         font-weight: normal !important;
         border-radius: 0 !important;
-        border: 1px solid #555555 !important;
-        padding: 8px 16px !important;
+        border: 1px solid #333333 !important;
+        padding: 12px !important;
+        width: 100% !important;
+        text-align: right !important;
+        font-size: 14px !important;
     }
     
-    .stButton>button:hover {
-        background-color: #444444 !important;
-        border-color: #777777 !important;
+    div.stButton > button:hover {
+        background-color: #262626 !important;
+        border-color: #ffffff !important;
+    }
+    
+    /* مدخلات البحث */
+    div[data-testid="stTextInput"] input {
+        background-color: #1a1a1a !important;
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+        border-radius: 0px !important;
+    }
+    
+    /* النوافذ العائمة ومربعات الحوار المحمية */
+    div[data-testid="stPopoverWindow"] {
+        background-color: #1a1a1a !important;
+        border: 1px solid #333333 !important;
     }
     
     .empty-state {
@@ -140,13 +119,15 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    [data-testid="stSidebar"] { display: none; }
-    footer { display: none; }
+    [data-testid="stSidebar"] { display: none !important; }
+    div[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+    footer { display: none !important; }
+    header { visibility: hidden !important; }
     
     </style>
 """, unsafe_allow_html=True)
 
-# دوال مساعدة
+# 2️⃣ معالجة النصوص والدوال الميكانيكية للبيانات
 def normalize_arabic(text):
     if not isinstance(text, str):
         return ""
@@ -160,7 +141,10 @@ def normalize_arabic(text):
 def load_quran_data():
     for path in ["data/data_quran.xlsx", "data_quran.xlsx"]:
         if os.path.exists(path):
-            return pd.read_excel(path)
+            try:
+                return pd.read_excel(path)
+            except:
+                return None
     return None
 
 def identify_columns(df):
@@ -218,14 +202,15 @@ def get_context(df, surah, verse, before, after):
         })
     return context
 
+# 3️⃣ إدارة الأوراق المستقلة والمجلد المادي
+RESULTS_DIR = 'data/mfolder_results'
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
 def save_paper(query, surah, verse, text, context_verses):
-    os.makedirs('data/mfolder_results', exist_ok=True)
-    
-    filename = re.sub(r'[^\u0621-\u064A0-9]', '_', query)[:50]
-    if not filename:
-        filename = f"{surah}_{verse}"
-    
-    filepath = f'data/mfolder_results/{filename}.json'
+    sanitized = re.sub(r'[^\u0621-\u064A0-9]', '_', query).strip('_')
+    # إذا كان البحث طويلاً، نشتق الاسم من الكلمة الأكبر، وإلا نعتمد رقم السورة والآية كمحدد مادي ثابت
+    filename = sorted(sanitized.split(), key=len)[-1] if sanitized.split() else f"{surah}_{verse}"
+    filepath = os.path.join(RESULTS_DIR, f"{filename}_{surah}_{verse}.json")
     
     data = {
         'query': query,
@@ -235,7 +220,6 @@ def save_paper(query, surah, verse, text, context_verses):
         'context': context_verses,
         'timestamp': datetime.now().isoformat()
     }
-    
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -244,14 +228,13 @@ def save_paper(query, surah, verse, text, context_verses):
         return False
 
 def load_papers():
-    papers_dir = 'data/mfolder_results'
-    if not os.path.exists(papers_dir):
+    if not os.path.exists(RESULTS_DIR):
         return {}
     
     papers = {}
-    for filename in os.listdir(papers_dir):
+    for filename in os.listdir(RESULTS_DIR):
         if filename.endswith('.json'):
-            filepath = os.path.join(papers_dir, filename)
+            filepath = os.path.join(RESULTS_DIR, filename)
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     papers[filename[:-5]] = json.load(f)
@@ -259,21 +242,23 @@ def load_papers():
                 pass
     return papers
 
-# تهيئة الجلسة
-if 'search_query' not in st.session_state:
-    st.session_state.search_query = ""
+# 4️⃣ تهيئة وتأمين الذاكرة المستمرة للجلسة لضمان استقرار حركة البيانات ومنع الارتداد
+if 'main_search' not in st.session_state:
+    st.session_state.main_search = ""
+if 'active_verse_idx' not in st.session_state:
+    st.session_state.active_verse_idx = None
 if 'verses_before' not in st.session_state:
     st.session_state.verses_before = 2
 if 'verses_after' not in st.session_state:
     st.session_state.verses_after = 2
 
-# تحميل البيانات
+# تحميل قاعدة البيانات ماديّاً
 df_quran = load_quran_data()
 if df_quran is None:
-    st.error("خطأ في تحميل البيانات")
+    st.text("خطأ مادي: ملف قاعدة البيانات غير موجود")
     st.stop()
 
-# شريط البحث العلوي
+# 5️⃣ بناء لوحة التحكم العلوية والمحافظة على المساحة
 col_left, col_center, col_right = st.columns([1, 3, 1])
 
 with col_left:
@@ -283,71 +268,96 @@ with col_left:
         st.session_state.verses_after = st.number_input("بعد:", 1, 20, st.session_state.verses_after)
 
 with col_center:
-    search_query = st.text_input("🔍", placeholder="ابحث...", label_visibility="collapsed")
-    st.session_state.search_query = search_query
+    # استخدام الـ key المباشر يربط الحقل بالذاكرة فوراً ويمنع تجميد البحث عند الـ Rerun
+    st.text_input("🔍", key="main_search", placeholder="ابحث عن لفظ أو شطر آية...", label_visibility="collapsed")
 
 with col_right:
     with st.popover("💾"):
-        st.markdown("**الأوراق**")
+        st.markdown("**الأوراق المستقلة**")
         papers = load_papers()
         if papers:
             for paper_name, paper_data in papers.items():
-                if st.button(f"📄 {paper_name}", use_container_width=True):
-                    st.session_state.search_query = paper_data['query']
+                if st.button(f"📄 {paper_name}", use_container_width=True, key=f"p_load_{paper_name}"):
+                    st.session_state.main_search = paper_data['query']
+                    st.session_state.active_verse_idx = f"{paper_data['surah']}_{paper_data['verse']}"
                     st.rerun()
         else:
-            st.write("لا توجد أوراق محفوظة")
+            st.text("المجلد خاوٍ ماديّاً.")
 
 st.divider()
 
-# السبورة السوداء
+# 6️⃣ لسان وعاء السبورة السوداء الشاملة (حبس النتائج بالكامل في الوعاء)
 st.markdown('<div class="blackboard">', unsafe_allow_html=True)
 
-if search_query:
-    results = search_unified(df_quran, search_query)
+current_search = st.session_state.main_search
+
+if current_search:
+    results = search_unified(df_quran, current_search)
     
     if not results:
-        st.markdown('<div class="empty-state"><p>لم يتم العثور على نتائج</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="empty-state"><p>السبورة لا تحتوي على نتائج مطابقة.</p></div>', unsafe_allow_html=True)
     else:
+        # أولاً: طباعة قائمة أسطر الآيات المطابقة داخل الوعاء
         for idx, result in enumerate(results):
-            if st.button(
-                f"{result['text'][:60]}...\n{result['surah']} : {result['verse']}",
-                key=f"result_{idx}",
-                use_container_width=True
-            ):
-                st.markdown("**الآية**")
-                st.markdown(f"<div class='verse-preview'>{result['text']}</div>", unsafe_allow_html=True)
+            v_key = f"{result['surah']}_{result['verse']}"
+            label = f"﴿ {result['text'][:50]}... ﴾ ─── ({result['surah']}: {result['verse']})"
+            
+            if st.button(label, key=f"res_btn_{idx}", use_container_width=True):
+                st.session_state.active_verse_idx = v_key
+                st.rerun()
+        
+        # ثانياً: تفكيك وعرض المعاينة والسياق والحفظ للآية النشطة المستقرة في الجلسة
+        if st.session_state.active_verse_idx:
+            matched_target = next((r for r in results if f"{r['surah']}_{r['verse']}" == st.session_state.active_verse_idx), None)
+            
+            if matched_target:
+                st.write("---")
+                st.markdown("### 📄 المعاينة الهيكلية للآية")
+                st.markdown(f"<div class='verse-preview'>{matched_target['text']}</div>", unsafe_allow_html=True)
                 
+                # جلب مصفوفة السياق المتسلسل بناءً على المعايير
                 context_verses = get_context(
                     df_quran,
-                    result['surah'],
-                    result['verse'],
+                    matched_target['surah'],
+                    matched_target['verse'],
                     st.session_state.verses_before,
                     st.session_state.verses_after
                 )
                 
-                st.markdown("**السياق**")
+                st.markdown("### 🔗 السياق التدبري المرتبط")
                 for ctx in context_verses:
                     if ctx['is_center']:
                         st.markdown(f"<div class='context-verse context-verse-center'>⭐ [{ctx['verse']}] {ctx['text']}</div>", unsafe_allow_html=True)
                     else:
                         st.markdown(f"<div class='context-verse'>[{ctx['verse']}] {ctx['text']}</div>", unsafe_allow_html=True)
                 
-                st.markdown("**الكلمات**")
-                words = result['text'].split()
-                word_cols = st.columns(min(len(words), 5))
+                # تفكيك الألفاظ أفقيّاً وتنظيفها من حروف الوقف المشوهة وعزل الحروف القصيرة أقل من حرفين
+                st.markdown("### 🔍 تتبع اللفظ أفقياً (البحث المستمر)")
+                raw_words = matched_target['text'].split()
+                clean_words = [w.strip("ۖۗقليجۘم") for w in raw_words if len(w.strip("ۖۗقليجۘم")) > 1]
                 
-                for i, word in enumerate(words):
+                word_cols = st.columns(len(clean_words) if len(clean_words) > 0 else 1)
+                for i, word in enumerate(clean_words):
                     with word_cols[i % len(word_cols)]:
-                        if st.button(word[:12], key=f"word_{idx}_{i}"):
-                            st.session_state.search_query = word
+                        if st.button(word, key=f"wd_lnk_{i}_{word}", use_container_width=True):
+                            # إحلال وتحديث البحث الرئيسي باللفظ الجديد مباشرة وتصفير المعاينة لبدء مستوى تتبع مستقر
+                            st.session_state.main_search = word
+                            st.session_state.active_verse_idx = None
                             st.rerun()
                 
-                st.divider()
-                if st.button("💾 حفظ الورقة", use_container_width=True):
-                    if save_paper(st.session_state.search_query, result['surah'], result['verse'], result['text'], context_verses):
-                        st.success("✅ تم الحفظ")
+                # آلية تشغيل زر حفظ الأوراق المستقلة خارج الحلقات التكرارية التدميرية
+                st.write("---")
+                if st.button("💾 حفظ هذه المعاينة كـ ورقة مستقلة", use_container_width=True, key="save_action_btn"):
+                    success = save_paper(
+                        current_search, 
+                        matched_target['surah'], 
+                        matched_target['verse'], 
+                        matched_target['text'], 
+                        context_verses
+                    )
+                    if success:
+                        st.toast("تم تسجيل الورقة ماديّاً في المجلد")
 else:
-    st.markdown('<div class="empty-state"><p>ابدأ البحث</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="empty-state"><p>السبورة بانتظار إدخال كلمة البحث الموحد.</p></div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
