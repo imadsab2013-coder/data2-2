@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 # 1️⃣ الإعدادات البصرية والمادية
-st.set_page_config(page_title="مجلس البينة V4", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="مجلس البينة V5", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -45,7 +45,7 @@ st.markdown("""
         color: #ffffff;
     }
     
-    /* أزرار عريضة وواضحة */
+    /* أزرار مصفوفة الكلمات - منع التكسير العمودي */
     div.stButton > button {
         background-color: #111111 !important;
         color: #ffffff !important;
@@ -53,8 +53,11 @@ st.markdown("""
         border: 1px solid #333333 !important;
         width: 100% !important;
         text-align: center !important;
-        padding: 10px !important;
+        padding: 8px !important;
         font-weight: bold !important;
+        font-size: 14px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
     }
     
     div.stButton > button:hover {
@@ -73,10 +76,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2️⃣ دوال التنظيف المادي (إزالة علامات الضبط المسببة للمربعات)
+# 2️⃣ دوال التنظيف والتطهير المادي لمنع المربعات
 def clean_quran_text(text):
     if not isinstance(text, str): return ""
-    return re.sub(r"[\u0610-\u0615\u064B-\u065E\u06D6-\u06ED]", "", text).strip()
+    # إزالة علامات التشكيل والضبط العثماني والرموز الخاصة
+    return re.sub(r"[\u0610-\u0615\u064B-\u065E\u06D6-\u06ED\u200B-\u200D\uFEFF]", "", text).strip()
+
+def clean_surah_names(name):
+    if not isinstance(name, str): return ""
+    name = clean_quran_text(name)
+    # تنظيف مخصص للرموز المسببة للمربعات في أسماء السور الشائعة
+    name = re.sub(r"[^\u0621-\u064A\s0-9:]", "", name)
+    return name.strip()
 
 def normalize_arabic(text):
     text = clean_quran_text(text)
@@ -99,18 +110,20 @@ def load_quran_data():
             except: continue
     return None
 
-# 3️⃣ ميكانيكا الأوراق المستقلة (تعمل بشكل ممتاز كما أكدت)
+# 3️⃣ ميكانيكا حفظ الأوراق المستقلة
 RESULTS_DIR = 'data/mfolder_results'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-def save_paper(query, surah, verse, text, context_verses):
+def save_paper(query, title_suffix, text_content, extra_data=None):
     sanitized = re.sub(r'[^\u0621-\u064A0-9]', '_', query).strip('_')
-    filename = sorted(sanitized.split(), key=len)[-1] if sanitized.split() else f"{surah}_{verse}"
-    filepath = os.path.join(RESULTS_DIR, f"{filename}_{surah}_{verse}.json")
+    filename = sorted(sanitized.split(), key=len)[-1] if sanitized.split() else "research"
+    filepath = os.path.join(RESULTS_DIR, f"{filename}_{title_suffix}_{datetime.now().strftime('%H%M%S')}.json")
     
     data = {
-        'query': query, 'surah': surah, 'verse': verse,
-        'text': text, 'context': context_verses,
+        'query': query,
+        'title': title_suffix,
+        'main_content': text_content,
+        'extra': extra_data,
         'timestamp': datetime.now().isoformat()
     }
     try:
@@ -119,34 +132,28 @@ def save_paper(query, surah, verse, text, context_verses):
         return True
     except: return False
 
-def load_papers():
-    if not os.path.exists(RESULTS_DIR): return {}
-    papers = {}
-    for f in os.listdir(RESULTS_DIR):
-        if f.endswith('.json'):
-            try:
-                with open(os.path.join(RESULTS_DIR, f), 'r', encoding='utf-8') as file:
-                    papers[f[:-5]] = json.load(file)
-            except: pass
-    return papers
+# 4️⃣ إدارة حالة الذاكرة (Session State) الموحدة
+if "main_query" not in st.session_state: st.session_state.main_query = ""
+if "selected_main_verse" not in st.session_state: st.session_state.selected_main_verse = None
+if "tracked_word" not in st.session_state: st.session_state.tracked_word = None
 
-# 4️⃣ هيكلة الذاكرة ودوال الـ Callbacks الصارمة لمنع الارتداد
-if "search_query" not in st.session_state: st.session_state.search_query = ""
-if "selected_verse_key" not in st.session_state: st.session_state.selected_verse_key = None
+def reset_all():
+    st.session_state.main_query = ""
+    st.session_state.selected_main_verse = None
+    st.session_state.tracked_word = None
 
-# دالة التحديث المباشر للمبحث (تُستدعى عند التغيير في خانة البحث)
-def on_search_change():
-    st.session_state.selected_verse_key = None
+def on_main_query_change():
+    st.session_state.selected_main_verse = None
+    st.session_state.tracked_word = None
 
-# دالة التحديث المباشر عند الضغط على زر (لتفادي مشكلة الضغط المزدوج)
-def track_word_action(new_word):
-    st.session_state.search_query = new_word
-    st.session_state.selected_verse_key = None
+def set_active_main_verse(v_key):
+    st.session_state.selected_main_verse = v_key
+    st.session_state.tracked_word = None # تصفير التتبع الفرعي عند تغيير الآية المختارة
 
-def set_active_verse(v_key):
-    st.session_state.selected_verse_key = v_key
+def set_tracked_word(word):
+    st.session_state.tracked_word = word
 
-# 5️⃣ تحميل البيانات الرئيسية
+# 5️⃣ تحميل قاعدة البيانات الإحصائية
 df_quran = load_quran_data()
 if df_quran is None:
     st.error("خطأ مادي: ملف البيانات غير موجود.")
@@ -157,120 +164,134 @@ surah_col = next((c for c in cols if c in ['السورة', 'surah']), cols[0])
 verse_col = next((c for c in cols if c in ['رقم الآية', 'verse_number', 'الآية']), cols[1])
 text_col = next((c for c in cols if c in ['نص الآية', 'text', 'الآية_نص']), cols[2])
 
-# 6️⃣ الواجهة العلوية
-col_input, col_papers, col_clear = st.columns([4, 1, 1])
+# تطبيق التطهير الفوري لأسماء السور لتفادي المربعات بالكامل
+df_quran[surah_col] = df_quran[surah_col].apply(clean_surah_names)
+
+# 6️⃣ شريط التحكم العلوي
+col_input, col_clear = st.columns([5, 1])
 
 with col_input:
-    # ربط المربع مباشرة بالمتغير الرئيسي search_query
     st.text_input(
-        "المبحث الموحد:", 
-        key="search_query", 
-        on_change=on_search_change, 
-        placeholder="أدخل اللفظ المراد تتبعه منطقياً...", 
+        "المبحث الرئيسي الكبير:", 
+        key="main_query", 
+        on_change=on_main_query_change, 
+        placeholder="أدخل مبحث البحث الأول الكبير هنا...", 
         label_visibility="collapsed"
     )
-
-with col_papers:
-    with st.popover("📁 الأوراق"):
-        saved_papers = load_papers()
-        if saved_papers:
-            for p_name, p_data in saved_papers.items():
-                v_key = f"{p_data['surah']}_{p_data['verse']}"
-                st.button(
-                    f"📄 {p_name}", 
-                    key=f"load_p_{p_name}", 
-                    on_click=track_word_action, 
-                    args=(p_data['query'],)
-                )
-        else:
-            st.text("المجلد خاوٍ.")
-
 with col_clear:
-    if st.button("🔄 تصفير"):
-        track_word_action("")
+    if st.button("🔄 تصفير الشاشة"):
+        reset_all()
 
-# 7️⃣ السبورة السوداء
+# 7️⃣ السبورة السوداء التحليلية
 st.markdown('<div class="blackboard-container">', unsafe_allow_html=True)
 
-if st.session_state.search_query:
-    q_norm = normalize_arabic(st.session_state.search_query)
-    matched_rows = []
+if st.session_state.main_query:
+    # معالجة مطابقات البحث الأول الكبير
+    mq_norm = normalize_arabic(st.session_state.main_query)
+    main_matches = []
     
     for idx, row in df_quran.iterrows():
         t_norm = normalize_arabic(str(row[text_col]))
-        if q_norm in t_norm:
-            matched_rows.append({
+        if mq_norm in t_norm:
+            main_matches.append({
                 'surah': row[surah_col], 'verse': int(row[verse_col]), 
                 'text': row[text_col], 'idx': idx
             })
             
-    if not matched_rows:
-        st.markdown("<p style='color:#666;'>لا توجد نتائج مطابقة.</p>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"**المطابقات: ({len(matched_rows)})**")
+    # تقسيم الشاشة إلى شقين مستقلين هندسياً
+    col_right_main, col_left_sub = st.columns([1, 1])
+    
+    # ---------------- الشق الأيمن: البحث الرئيسي الكبير وثابت دائماً ----------------
+    with col_right_main:
+        st.markdown(f"### 🔍 نتائج المبحث الكبير: ({len(main_matches)})")
         
-        col_list, col_view = st.columns([1, 1])
+        # أرشفة وحفظ المبحث الكبير كاملاً
+        if len(main_matches) > 0:
+            if st.button("💾 حفظ المبحث الكبير كاملاً", key="save_main_large"):
+                all_texts = [f"({m['surah']}:{m['verse']}) {m['text']}" for m in main_matches]
+                if save_paper(st.session_state.main_query, "البحث_الكبير", "\n".join(all_texts)):
+                    st.success("✅ تم حفظ نتائج المبحث الكبير")
         
-        with col_list:
-            st.markdown("<p style='color:#888; font-size:13px;'>قائمة النتائج:</p>", unsafe_allow_html=True)
-            for i, match in enumerate(matched_rows):
-                v_key = f"{match['surah']}_{match['verse']}"
-                active_mark = "🔹 " if st.session_state.selected_verse_key == v_key else ""
-                btn_label = f"{active_mark}﴿ {match['text'][:40]}... ﴾ ({match['surah']}:{match['verse']})"
+        st.write("---")
+        
+        # قائمة آيات المبحث الكبير
+        for i, match in enumerate(main_matches):
+            v_key = f"{match['surah']}_{match['verse']}"
+            active_mark = "🔹 " if st.session_state.selected_main_verse == v_key else ""
+            btn_label = f"{active_mark}﴿ {match['text'][:35]}... ﴾ ({match['surah']}:{match['verse']})"
+            
+            st.button(
+                btn_label, 
+                key=f"main_v_{i}_{v_key}", 
+                on_click=set_active_main_verse, 
+                args=(v_key,)
+            )
+
+    # ---------------- الشق الأيسر: يتغير بالكامل عند تفكيك الكلمات وتتبعها ----------------
+    with col_left_sub:
+        if st.session_state.selected_main_verse and not st.session_state.tracked_word:
+            # تظهر الآية المختارة وسياقها وتفكيكها في البداية
+            target = next((m for m in main_matches if f"{m['surah']}_{m['verse']}" == st.session_state.selected_main_verse), None)
+            if target:
+                st.markdown("### 📄 المعاينة الهيكلية للآية")
+                st.markdown(f"<div class='verse-preview'>{target['text']}</div>", unsafe_allow_html=True)
                 
-                st.button(
-                    btn_label, 
-                    key=f"v_btn_{i}_{v_key}", 
-                    on_click=set_active_verse, 
-                    args=(v_key,)
-                )
-                    
-        with col_view:
-            if st.session_state.selected_verse_key:
-                target = next((m for m in matched_rows if f"{m['surah']}_{m['verse']}" == st.session_state.selected_verse_key), None)
-                if target:
-                    st.markdown("### 📄 المعاينة الهيكلية")
-                    st.markdown(f"<div class='verse-preview'>{target['text']}</div>", unsafe_allow_html=True)
-                    
-                    st.markdown("### 🔗 السياق التدبري")
-                    start_v = max(1, target['verse'] - 2)
-                    end_v = target['verse'] + 2
-                    
-                    ctx_mask = (df_quran[surah_col] == target['surah']) & (df_quran[verse_col].astype(int).between(start_v, end_v))
-                    context_verses = []
-                    
-                    for _, c_row in df_quran[ctx_mask].sort_values(verse_col).iterrows():
-                        v_num = int(c_row[verse_col])
-                        is_tgt = (v_num == target['verse'])
-                        context_verses.append({'verse': v_num, 'text': c_row[text_col], 'is_center': is_tgt})
-                        
-                        cls = "context-verse context-verse-center" if is_tgt else "context-verse"
-                        prefix = "⭐ " if is_tgt else ""
-                        st.markdown(f"<div class='{cls}'>{prefix}[{v_num}] {c_row[text_col]}</div>", unsafe_allow_html=True)
-                    
-                    st.markdown("### 🔍 تتبع اللفظ أفقياً")
-                    words = [w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم") for w in target['text'].split() if len(w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم")) > 1]
-                    
-                    # هندسة المصفوفة الشبكية: تحديد 4 أعمدة في كل سطر لحل مشكلة التكسير العمودي للحروف
-                    cols_per_row = 4
-                    for i in range(0, len(words), cols_per_row):
-                        row_cols = st.columns(cols_per_row)
-                        for j in range(cols_per_row):
-                            if i + j < len(words):
-                                word = words[i + j]
-                                with row_cols[j]:
-                                    st.button(
-                                        word, 
-                                        key=f"trk_{target['surah']}_{target['verse']}_{i+j}_{word}", 
-                                        on_click=track_word_action, 
-                                        args=(word,)
-                                    )
+                st.markdown("### 🔗 السياق التدبري")
+                start_v = max(1, target['verse'] - 2)
+                end_v = target['verse'] + 2
+                ctx_mask = (df_quran[surah_col] == target['surah']) & (df_quran[verse_col].astype(int).between(start_v, end_v))
+                
+                for _, c_row in df_quran[ctx_mask].sort_values(verse_col).iterrows():
+                    v_num = int(c_row[verse_col])
+                    is_tgt = (v_num == target['verse'])
+                    cls = "context-verse context-verse-center" if is_tgt else "context-verse"
+                    prefix = "⭐ " if is_tgt else ""
+                    st.markdown(f"<div class='{cls}'>{prefix}[{v_num}] {c_row[text_col]}</div>", unsafe_allow_html=True)
+                
+                st.markdown("### 🛠️ تفكيك الآية (اضغط على كلمة لتتبعها وإحلالها هنا)")
+                words = [w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم") for w in target['text'].split() if len(w.strip(".,:-()\"' ﴿﴾ۖۗقليجۘم")) > 1]
+                
+                cols_per_row = 4
+                for i in range(0, len(words), cols_per_row):
+                    row_cols = st.columns(cols_per_row)
+                    for j in range(cols_per_row):
+                        if i + j < len(words):
+                            word = words[i + j]
+                            with row_cols[j]:
+                                st.button(word, key=f"word_clk_{i+j}_{word}", on_click=set_tracked_word, args=(word,))
                                 
-                    st.write("---")
-                    if st.button("💾 حفظ كـ ورقة مستقلة", use_container_width=True):
-                        if save_paper(st.session_state.search_query, target['surah'], target['verse'], target['text'], context_verses):
-                            st.success("✅ تم حفظ الورقة مادياً بنجاح")
-            else:
-                st.markdown("<div style='text-align:center; padding:50px; color:#444;'>اختر آية لعرض التفاصيل.</div>", unsafe_allow_html=True)
+        elif st.session_state.tracked_word:
+            # إحلال كامل وتدمير محتوى المعاينة ليعوضه ناتج اللفظ المضغوط
+            st.markdown(f"### 🎯 تتبع اللفظ: [ {st.session_state.tracked_word} ]")
+            
+            sub_q_norm = normalize_arabic(st.session_state.tracked_word)
+            sub_matches = []
+            
+            for idx, row in df_quran.iterrows():
+                t_norm = normalize_arabic(str(row[text_col]))
+                if sub_q_norm in t_norm:
+                    sub_matches.append({
+                        'surah': row[surah_col], 'verse': int(row[verse_col]), 'text': row[text_col]
+                    })
+            
+            st.markdown(f"**عدد نتائج اللفظ الفرعي المتتبع: ({len(sub_matches)})**")
+            
+            # زر حفظ مستقل للفظ المتتبع
+            if st.button("💾 حفظ ورقة اللفظ المتتبع الحالية", use_container_width=True):
+                sub_texts = [f"({sm['surah']}:{sm['verse']}) {sm['text']}" for sm in sub_matches]
+                if save_paper(st.session_state.tracked_word, "تتبع_لفظ", "\n".join(sub_texts)):
+                    st.success(f"✅ تم حفظ ورقة تتبع اللفظ [{st.session_state.tracked_word}]")
+                    
+            if st.button("⬅️ العودة لمعاينة الآية وتفكيكها", use_container_width=True):
+                st.session_state.tracked_word = None
+                st.rerun()
+                
+            st.write("---")
+            
+            # عرض مطابقات اللفظ المتتبع الجديد وسياقها مباشرة
+            for idx, sm in enumerate(sub_matches):
+                st.markdown(f"<div class='context-verse-center'>﴿ {sm['text']} ﴾ <span style='color:#aaa; font-size:12px;'>[{sm['surah']}:{sm['verse']}]</span></div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='text-align:center; padding:100px; color:#444;'>اختر آية من المبحث الكبير لعرض تفاصيلها وتتبع ألفاظها هندسياً.</div>", unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
